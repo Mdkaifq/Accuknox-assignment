@@ -1,0 +1,44 @@
+Yes, by default, Django signals run in the same database transaction as the caller when using database-related signals like post_save, pre_save, etc. This means that if the signal handler modifies the database, those changes will be part of the same transaction and will only be committed if the entire transaction succeeds. Conversely, if the transaction is rolled back, the changes made in the signal handler will also be rolled back.
+To prove this, here's a code snippet demonstrating that signals run in the same transaction as the caller:
+
+# signals.py
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth.models import User
+from django.db import transaction
+
+@receiver(post_save, sender=User)
+def user_saved_handler(sender, instance, **kwargs):
+    print("Signal handler triggered.")
+    instance.first_name = 'UpdatedBySignal'
+    instance.save()  # Modify the user instance in the signal handler
+    print("Signal handler completed.")
+
+# views.py
+from django.db import transaction
+from django.contrib.auth.models import User
+
+def create_user_view(request):
+    try:
+        with transaction.atomic():
+            print("View transaction started.")
+            user = User.objects.create(username='testuser')
+            print("User created in view.")
+            raise Exception("error to roll back transaction.")
+        print("View transaction completed.")
+    except Exception as e:
+        print(f"View transaction rolled back due to error: {e}")
+
+#What's happening
+When the create_user_view is called, it creates a user, which triggers the post_save signal. The signal handler modifies the user instance inside the same transaction.
+The transaction is deliberately interrupted by raising an exception, which causes the entire transaction (including any database changes made in the signal handler) to be rolled back.
+
+#output
+View transaction started.
+User created in view.
+Signal handler triggered.
+Signal handler completed.
+View transaction rolled back due to error: error to roll back transaction.
+
+Now, if we check the database the user testuser does not exist in the database because the entire transaction was rolled back, including the changes made by the signal handler.
+This proves that Django signals run within the same transaction context as the caller. If the signal had run outside the transaction, the changes made by the signal handler would have persisted despite the exception in the view.

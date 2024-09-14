@@ -1,0 +1,29 @@
+By default, Django signals are executed synchronously. This means the signal handlers are executed in the same thread as the signal emitter, and the emitter will wait for the handlers to complete before continuing. 
+To prove this, consider the following code snippet:
+
+# signals.py
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth.models import User
+import time
+
+@receiver(post_save, sender=User)
+def user_saved_handler(sender, instance, **kwargs):
+    print("Signal handler triggered.")
+    time.sleep(5)  # Simulate a delay
+    print("Signal handler finished.")
+
+# views.py
+from django.contrib.auth.models import User
+
+def create_user_view(request):
+    print("View triggered.")
+    user = User.objects.create(username='testuser')
+    print("View finished.")
+
+#output
+View triggered.
+Signal handler triggered.
+[5-second delay]
+Signal handler finished.
+View finished.
